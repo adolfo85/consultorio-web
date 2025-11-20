@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Service, Appointment, WorkSchedule } from '../types';
 import { ServiceCard } from './ServiceCard';
@@ -8,6 +7,8 @@ interface PatientBookingProps {
   services: Service[];
   existingAppointments: Appointment[];
   workSchedule: WorkSchedule;
+  blockedDates: string[];
+  initialService?: Service | null; // Propiedad para recibir el servicio pre-seleccionado
   onBook: (appointment: Omit<Appointment, 'id' | 'status' | 'endTime'>) => void;
 }
 
@@ -24,28 +25,44 @@ const minutesToTime = (minutes: number) => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
-export const PatientBooking: React.FC<PatientBookingProps> = ({ services, existingAppointments, workSchedule, onBook }) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+export const PatientBooking: React.FC<PatientBookingProps> = ({ 
+  services, 
+  existingAppointments, 
+  workSchedule, 
+  blockedDates, 
+  initialService, 
+  onBook 
+}) => {
+  // Si hay un servicio inicial, comenzamos en el paso 2, sino en el 1
+  const [step, setStep] = useState<1 | 2 | 3>(initialService ? 2 : 1);
+  const [selectedService, setSelectedService] = useState<Service | null>(initialService || null);
+  
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', notes: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Calculate dates for the next 21 days
+  // Calculate dates for the next 30 days
   const availableDates = useMemo(() => {
     const dates = [];
     const today = new Date();
-    for (let i = 1; i <= 21; i++) {
+    for (let i = 1; i <= 30; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       
+      const dateString = d.toISOString().split('T')[0];
       const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon...
       
-      // Only include if the day is enabled in workSchedule
-      if (workSchedule[dayOfWeek] && workSchedule[dayOfWeek].enabled) {
+      // Solo incluir si:
+      // 1. El día de la semana está habilitado en la agenda general
+      // 2. La fecha NO está en la lista de fechas bloqueadas
+      if (
+        workSchedule[dayOfWeek] && 
+        workSchedule[dayOfWeek].enabled && 
+        !blockedDates.includes(dateString)
+      ) {
         dates.push({
-          fullDate: d.toISOString().split('T')[0],
+          fullDate: dateString,
           dayName: d.toLocaleDateString('es-ES', { weekday: 'short' }),
           dayNumber: d.getDate(),
           month: d.toLocaleDateString('es-ES', { month: 'short' }),
@@ -54,7 +71,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({ services, existi
       }
     }
     return dates;
-  }, [workSchedule]);
+  }, [workSchedule, blockedDates]);
 
   const generateTimeSlots = (dateStr: string, serviceDuration: number) => {
     const dayIndex = new Date(dateStr + 'T00:00:00').getDay();
@@ -215,7 +232,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({ services, existi
 
             {/* Date Scroller */}
             <div className="flex gap-3 overflow-x-auto pb-4 mb-6 scrollbar-hide">
-              {availableDates.length === 0 && <p className="text-slate-400">No hay fechas disponibles configuradas.</p>}
+              {availableDates.length === 0 && <p className="text-slate-400">No hay fechas disponibles (revisa los días bloqueados por el consultorio).</p>}
               {availableDates.map((d) => (
                 <button
                   key={d.fullDate}

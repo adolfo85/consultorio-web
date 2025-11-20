@@ -2,19 +2,21 @@
 import React, { useState } from 'react';
 import { Appointment, Service, WorkSchedule } from '../types';
 import { analyzeSchedule } from '../services/geminiService';
-import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw } from 'lucide-react';
+import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff } from 'lucide-react';
 
 interface AdminDashboardProps {
   appointments: Appointment[];
   services: Service[];
   workSchedule: WorkSchedule;
   currentLogo?: string;
+  blockedDates: string[]; // Nueva propiedad
   onUpdateSchedule: (schedule: WorkSchedule) => void;
   onStatusChange: (id: string, status: 'confirmed' | 'cancelled') => void;
   onUpdateServices: (services: Service[]) => void;
   onDeleteServiceDB?: (id: string) => Promise<boolean>;
   onUpdateLogo?: (logo: string) => void;
   onRestoreDefaults?: () => Promise<void>;
+  onUpdateBlockedDates: (dates: string[]) => void; // Nueva función
 }
 
 const DAYS_OF_WEEK = [
@@ -26,12 +28,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   services, 
   workSchedule, 
   currentLogo,
+  blockedDates = [],
   onUpdateSchedule, 
   onStatusChange,
   onUpdateServices,
   onDeleteServiceDB,
   onUpdateLogo,
-  onRestoreDefaults
+  onRestoreDefaults,
+  onUpdateBlockedDates
 }) => {
   const [tab, setTab] = useState<'agenda' | 'settings' | 'services'>('agenda');
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -40,6 +44,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Default to today's date in local time
   const todayStr = new Date().toLocaleDateString('en-CA'); 
   const [filterDate, setFilterDate] = useState<string>(todayStr);
+  const [blockDateInput, setBlockDateInput] = useState('');
 
   const [tempSchedule, setTempSchedule] = useState<WorkSchedule>(workSchedule);
   
@@ -62,7 +67,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleSaveSettings = () => {
     onUpdateSchedule(tempSchedule);
-    alert("Configuración guardada correctamente.");
+    alert("Configuración de horarios semanales guardada.");
   };
 
   const handleScheduleChange = (dayIndex: number, field: 'enabled' | 'start' | 'end', value: any) => {
@@ -73,6 +78,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         [field]: value
       }
     }));
+  };
+
+  const handleAddBlockedDate = () => {
+      if (!blockDateInput) return;
+      if (!blockedDates.includes(blockDateInput)) {
+          const newDates = [...blockedDates, blockDateInput].sort();
+          onUpdateBlockedDates(newDates);
+      }
+      setBlockDateInput('');
+  };
+
+  const handleRemoveBlockedDate = (dateToRemove: string) => {
+      const newDates = blockedDates.filter(d => d !== dateToRemove);
+      onUpdateBlockedDates(newDates);
   };
 
   const handleAddService = () => {
@@ -433,7 +452,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
              ))}
           </div>
 
-          {/* Edit/Create Service Modal (Inline) */}
+          {/* Edit/Create Service Modal */}
           {editingService && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl animate-fade-in-up">
@@ -529,24 +548,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {tab === 'settings' && (
-        <div className="max-w-3xl mx-auto">
-           {/* Logo Config */}
-           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
-               <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-800">Identidad del Consultorio</h3>
-                        <p className="text-sm text-slate-500">Personaliza el logo que ven los pacientes.</p>
+        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+           
+           {/* Left Column: Logo & Blocked Dates */}
+           <div className="space-y-8">
+               {/* Logo Config */}
+               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                   <div className="mb-6 border-b border-slate-100 pb-4">
+                        <h3 className="text-xl font-bold text-slate-800">Identidad</h3>
+                        <p className="text-sm text-slate-500">Personaliza el logo.</p>
                     </div>
-                </div>
-                <div className="flex items-center gap-6">
-                    <div className="w-24 h-24 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-2">
-                        <img src={currentLogo} alt="Current Logo" className="w-full h-full object-contain" />
-                    </div>
-                    <div className="flex-1">
-                        <label className="block mb-2 text-sm font-medium text-slate-700">Subir nuevo logo (JPG, PNG)</label>
-                         <label className="inline-flex items-center cursor-pointer">
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-2">
+                            <img src={currentLogo} alt="Current Logo" className="w-full h-full object-contain" />
+                        </div>
+                        <label className="inline-flex items-center cursor-pointer">
                             <div className="flex items-center justify-center py-2 px-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-colors shadow-md">
-                                <Upload className="w-4 h-4 mr-2" /> Seleccionar Archivo
+                                <Upload className="w-4 h-4 mr-2" /> Subir Logo
                             </div>
                             <input 
                                 type="file" 
@@ -555,66 +573,101 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onChange={(e) => onUpdateLogo && handleImageUpload(e, onUpdateLogo)}
                             />
                         </label>
-                        <p className="text-xs text-slate-400 mt-2">Se recomienda una imagen cuadrada o redonda con fondo transparente.</p>
                     </div>
-                </div>
+               </div>
+
+               {/* Blocked Dates Config */}
+               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                   <div className="mb-6 border-b border-slate-100 pb-4">
+                        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <CalendarOff className="w-5 h-5 text-red-500" />
+                            Días Bloqueados
+                        </h3>
+                        <p className="text-sm text-slate-500">Feriados o días libres específicos.</p>
+                    </div>
+                    
+                    <div className="flex gap-2 mb-4">
+                        <input 
+                            type="date" 
+                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 flex-1"
+                            value={blockDateInput}
+                            onChange={(e) => setBlockDateInput(e.target.value)}
+                        />
+                        <button 
+                            onClick={handleAddBlockedDate}
+                            disabled={!blockDateInput}
+                            className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
+                        >
+                            Bloquear
+                        </button>
+                    </div>
+
+                    {blockedDates.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic">No hay fechas bloqueadas.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {blockedDates.map(date => (
+                                <div key={date} className="bg-red-50 border border-red-100 text-red-700 text-sm px-3 py-1 rounded-full flex items-center gap-2">
+                                    {new Date(date).toLocaleDateString('es-ES', {day: 'numeric', month: 'numeric'})}
+                                    <button onClick={() => handleRemoveBlockedDate(date)} className="hover:text-red-900">
+                                        <XCircle className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+               </div>
            </div>
 
-           {/* Schedule Config */}
+           {/* Right Column: Weekly Schedule */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                 <div>
-                <h3 className="text-xl font-bold text-slate-800">Días y Horarios de Atención</h3>
-                <p className="text-sm text-slate-500">Configura los días laborales y el rango horario disponible para turnos.</p>
+                <h3 className="text-xl font-bold text-slate-800">Horarios Semanales</h3>
+                <p className="text-sm text-slate-500">Agenda habitual.</p>
                 </div>
                 <button 
                 onClick={handleSaveSettings}
-                className="bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-teal-700 transition-colors shadow-sm"
+                className="bg-teal-600 text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-teal-700 transition-colors shadow-sm text-sm font-bold"
                 >
-                <Save className="w-4 h-4" /> Guardar Cambios
+                <Save className="w-4 h-4" /> Guardar
                 </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
                 {DAYS_OF_WEEK.map((dayName, index) => {
                 const config = tempSchedule[index] || { enabled: false, start: "09:00", end: "18:00" };
                 
                 return (
-                    <div key={index} className={`flex items-center gap-4 p-4 rounded-lg border ${config.enabled ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent opacity-60'}`}>
-                    <div className="w-32">
-                        <label className="flex items-center gap-3 cursor-pointer">
+                    <div key={index} className={`flex items-center gap-2 p-3 rounded-lg border ${config.enabled ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent opacity-60'}`}>
+                    <div className="w-28">
+                        <label className="flex items-center gap-2 cursor-pointer">
                         <input 
                             type="checkbox" 
                             checked={config.enabled}
                             onChange={(e) => handleScheduleChange(index, 'enabled', e.target.checked)}
-                            className="w-5 h-5 text-teal-600 rounded focus:ring-teal-500 border-gray-300"
+                            className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 border-gray-300"
                         />
-                        <span className={`font-medium ${config.enabled ? 'text-slate-800' : 'text-slate-500'}`}>{dayName}</span>
+                        <span className={`text-sm font-medium ${config.enabled ? 'text-slate-800' : 'text-slate-500'}`}>{dayName}</span>
                         </label>
                     </div>
 
-                    <div className="flex items-center gap-4 flex-1">
-                        <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 uppercase font-bold w-10">Inicio</span>
+                    <div className="flex items-center gap-2 flex-1">
                         <input 
                             type="time" 
                             disabled={!config.enabled}
                             value={config.start}
                             onChange={(e) => handleScheduleChange(index, 'start', e.target.value)}
-                            className="border border-slate-300 rounded px-2 py-1 text-sm disabled:bg-slate-100 bg-white text-slate-900"
+                            className="border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 bg-white text-slate-900 w-20"
                         />
-                        </div>
                         <span className="text-slate-300">-</span>
-                        <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 uppercase font-bold w-8">Fin</span>
                         <input 
                             type="time" 
                             disabled={!config.enabled}
                             value={config.end}
                             onChange={(e) => handleScheduleChange(index, 'end', e.target.value)}
-                            className="border border-slate-300 rounded px-2 py-1 text-sm disabled:bg-slate-100 bg-white text-slate-900"
+                            className="border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 bg-white text-slate-900 w-20"
                         />
-                        </div>
                     </div>
                     </div>
                 );

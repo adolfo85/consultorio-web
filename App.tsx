@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ViewState, Service, Appointment, WorkSchedule } from './types';
 import { PatientBooking } from './components/PatientBooking';
@@ -79,9 +78,13 @@ const App: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [workSchedule, setWorkSchedule] = useState<WorkSchedule>(DEFAULT_SCHEDULE);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]); // State for blocked dates
   const [logo, setLogo] = useState<string>(DEFAULT_LOGO);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  
+  // Selected Service for Booking Flow
+  const [selectedServiceForBooking, setSelectedServiceForBooking] = useState<Service | null>(null);
   
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
@@ -106,13 +109,16 @@ const App: React.FC = () => {
       if (storedServices) setServices(JSON.parse(storedServices));
       const storedLogo = localStorage.getItem('rojas_deboeck_logo');
       if (storedLogo) setLogo(storedLogo);
+      const storedBlocked = localStorage.getItem('rojas_deboeck_blocked');
+      if (storedBlocked) setBlockedDates(JSON.parse(storedBlocked));
+      
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      // 1. Fetch Services - Leemos la base de datos real
+      // 1. Fetch Services
       const { data: dbServices, error: servicesError } = await supabase
         .from('services')
         .select('*');
@@ -124,23 +130,20 @@ const App: React.FC = () => {
             durationMinutes: Number(s.duration_minutes),
             price: Number(s.price),
             description: s.description,
-            doctor: s.doctor || 'Dr. De Boeck' // Leemos la columna doctor
+            doctor: s.doctor || 'Dr. De Boeck'
         }));
-        
-        // Ordenamos por ID (numérico) para mantener consistencia visual
         mappedServices.sort((a, b) => Number(a.id) - Number(b.id));
-        
         setServices(mappedServices);
       } else {
-        // Fallback si la tabla está vacía
         setServices(INITIAL_SERVICES);
       }
 
-      // 2. Fetch Config (Schedule & Logo)
+      // 2. Fetch Config (Schedule, Logo, Blocked Dates)
       const { data: dbConfig } = await supabase.from('config').select('*').eq('id', 'global_config').single();
       if (dbConfig) {
         if (dbConfig.schedule) setWorkSchedule(dbConfig.schedule);
         if (dbConfig.logo) setLogo(dbConfig.logo);
+        if (dbConfig.blocked_dates) setBlockedDates(dbConfig.blocked_dates); // Fetch blocked dates
       }
 
       // 3. Fetch Appointments
@@ -229,6 +232,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateBlockedDates = async (newDates: string[]) => {
+    setBlockedDates(newDates);
+    if (isSupabaseConfigured()) {
+        // Se asume que existe la columna blocked_dates (jsonb)
+        await supabase.from('config').upsert({ id: 'global_config', blocked_dates: newDates });
+    } else {
+        localStorage.setItem('rojas_deboeck_blocked', JSON.stringify(newDates));
+    }
+  };
+
   const handleUpdateLogo = async (newLogo: string) => {
     setLogo(newLogo);
     if (isSupabaseConfigured()) {
@@ -238,11 +251,9 @@ const App: React.FC = () => {
     }
   };
 
-  // GUARDADO OPTIMIZADO (Bulk Upsert)
   const handleUpdateServices = async (newServices: Service[]) => {
     setServices(newServices);
     if (isSupabaseConfigured()) {
-        // Mapeamos al formato SQL y enviamos todo junto
         const servicesPayload = newServices.map(s => ({
              id: s.id,
              name: s.name,
@@ -266,10 +277,7 @@ const App: React.FC = () => {
   const handleRestoreServices = async () => {
       setServices(INITIAL_SERVICES);
       if (isSupabaseConfigured()) {
-          // 1. Limpiamos la tabla
           await supabase.from('services').delete().neq('id', '0'); 
-          
-          // 2. Insertamos los iniciales
           const servicesPayload = INITIAL_SERVICES.map(s => ({
              id: s.id,
              name: s.name,
@@ -278,7 +286,6 @@ const App: React.FC = () => {
              description: s.description,
              doctor: s.doctor 
           }));
-          
           await supabase.from('services').upsert(servicesPayload);
       }
       alert("Servicios restaurados correctamente.");
@@ -295,6 +302,16 @@ const App: React.FC = () => {
       }
       return true;
   }
+
+  const handleBookFromLanding = (service: Service) => {
+      setSelectedServiceForBooking(service);
+      setView(ViewState.BOOKING);
+  };
+
+  const handleGeneralBooking = () => {
+      setSelectedServiceForBooking(null);
+      setView(ViewState.BOOKING);
+  };
 
   const handleAdminClick = () => {
     if (isAuthenticated) {
@@ -347,9 +364,6 @@ const App: React.FC = () => {
               <p className="text-slate-600 mb-4 max-w-md">
                   No se pudo conectar a la base de datos. Verifica tu configuración.
               </p>
-              <div className="bg-slate-900 text-white p-4 rounded-lg text-xs font-mono text-left w-full max-w-md overflow-auto">
-                  {connectionError}
-              </div>
               <button onClick={fetchData} className="mt-6 px-6 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700">
                   Reintentar
               </button>
@@ -407,7 +421,7 @@ const App: React.FC = () => {
               
               {view === ViewState.LANDING && (
                 <button 
-                  onClick={() => setView(ViewState.BOOKING)}
+                  onClick={handleGeneralBooking}
                   className="bg-teal-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg shadow-teal-200/50 hover:bg-teal-500 transition-all transform hover:-translate-y-0.5"
                 >
                   Agendar cita
@@ -438,7 +452,7 @@ const App: React.FC = () => {
                   Tecnología de vanguardia y atención personalizada. Especialistas en ortodoncia y estética dental.
                 </p>
                 <button 
-                  onClick={() => setView(ViewState.BOOKING)}
+                  onClick={handleGeneralBooking}
                   className="bg-teal-500 hover:bg-teal-400 text-white text-lg px-8 py-4 rounded-full font-bold shadow-xl transition-all transform hover:-translate-y-1 flex items-center gap-2 group"
                 >
                   Agendar cita
@@ -449,7 +463,11 @@ const App: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
               {services.map(s => (
-                <div key={s.id} className="bg-sky-50 rounded-xl shadow-sm border border-sky-100 hover:shadow-lg hover:border-teal-200 transition-all group overflow-hidden cursor-pointer p-6 flex flex-col h-full justify-between" onClick={() => setView(ViewState.BOOKING)}>
+                <div 
+                    key={s.id} 
+                    className="bg-sky-50 rounded-xl shadow-sm border border-sky-100 hover:shadow-lg hover:border-teal-200 transition-all group overflow-hidden cursor-pointer p-6 flex flex-col h-full justify-between" 
+                    onClick={() => handleBookFromLanding(s)}
+                >
                   <div>
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full mb-3 inline-block ${s.doctor === 'Dra. Rojas' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
                         {s.doctor || 'Dr. De Boeck'}
@@ -482,6 +500,8 @@ const App: React.FC = () => {
               services={services}
               existingAppointments={appointments}
               workSchedule={workSchedule}
+              blockedDates={blockedDates}
+              initialService={selectedServiceForBooking}
               onBook={handleBookAppointment}
             />
           </div>
@@ -494,12 +514,14 @@ const App: React.FC = () => {
               services={services}
               workSchedule={workSchedule}
               currentLogo={logo}
+              blockedDates={blockedDates}
               onUpdateSchedule={handleUpdateSchedule}
               onStatusChange={handleStatusChange}
               onUpdateServices={handleUpdateServices}
               onDeleteServiceDB={handleDeleteServiceDB}
               onUpdateLogo={handleUpdateLogo}
               onRestoreDefaults={handleRestoreServices}
+              onUpdateBlockedDates={handleUpdateBlockedDates}
             />
           </div>
         )}

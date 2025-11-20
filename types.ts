@@ -11,8 +11,8 @@ export interface Service {
   durationMinutes: number;
   price: number;
   description: string;
-  image?: string; // Optional now, not used in UI
-  doctor?: string; // 'Dr. De Boeck' | 'Dra. Rojas'
+  image?: string; 
+  doctor?: string; 
 }
 
 export interface Appointment {
@@ -23,7 +23,7 @@ export interface Appointment {
   patientPhone: string;
   date: string; // ISO Date string YYYY-MM-DD
   time: string; // HH:mm
-  endTime: string; // HH:mm - Calculated based on duration
+  endTime: string; // HH:mm
   status: 'confirmed' | 'cancelled' | 'completed';
   notes?: string;
 }
