@@ -4,6 +4,7 @@ import { ViewState, Service, Appointment, WorkSchedule } from './types';
 import { PatientBooking } from './components/PatientBooking';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkCarousel } from './components/WorkCarousel';
+import { PatientChatBot } from './components/PatientChatBot';
 import { Calendar, Lock, AlertCircle, LogOut, Stethoscope, Loader2, WifiOff } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
@@ -375,6 +376,7 @@ const App: React.FC = () => {
                  />
               </div>
               <div className="flex flex-col leading-none justify-center h-full">
+                <span className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-0.5">Consultorio odontológico</span>
                 <span className="text-xl font-bold text-slate-800 tracking-tight">Rojas-De Boeck</span>
               </div>
             </div>
@@ -501,6 +503,13 @@ const App: React.FC = () => {
             />
           </div>
         )}
+
+        {/* Patient AI Chatbot */}
+        {/* Solo visible para pacientes (Landing o Booking) */}
+        {view !== ViewState.ADMIN && (
+           <PatientChatBot services={services} workSchedule={workSchedule} />
+        )}
+
       </main>
 
       {/* Login Modal */}
