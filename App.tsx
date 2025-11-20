@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, Service, Appointment, WorkSchedule } from './types';
 import { PatientBooking } from './components/PatientBooking';
 import { AdminDashboard } from './components/AdminDashboard';
+import { WorkCarousel } from './components/WorkCarousel';
 import { Calendar, Lock, AlertCircle, LogOut, Stethoscope, Loader2, WifiOff } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
@@ -465,6 +466,11 @@ const App: React.FC = () => {
                 </div>
               ))}
             </div>
+            
+            <div className="mt-16 mb-8">
+                <WorkCarousel />
+            </div>
+
           </div>
         )}
 
