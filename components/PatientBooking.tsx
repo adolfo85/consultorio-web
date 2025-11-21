@@ -89,16 +89,9 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
     
     const interval = 30; 
 
-    // Filter existing appointments: only those for the SAME DOCTOR need to be checked for collision?
-    // Ideally yes, but simpler logic: filter appointments that match the doctor of the service.
-    // Or if rooms are shared, we check all. Assuming separate chairs/agendas:
     const dayApps = existingAppointments.filter(a => {
-        // Find the service for this appointment to know the doctor
         const appService = services.find(s => s.id === a.serviceId);
         const appDoctor = appService?.doctor || 'Dr. De Boeck';
-        
-        // Collision check only if it's the same doctor (or if you want to block shared resources)
-        // Here we assume independent agendas.
         return a.date === dateStr && a.status !== 'cancelled' && appDoctor === activeDoctor;
     });
 
@@ -156,7 +149,10 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
     }, 1500);
   };
 
-  const formatPrice = (price: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(price);
+  const formatPrice = (price: number) => {
+      if (price === 0) return 'A consultar';
+      return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(price);
+  };
 
   const deboeckServices = services.filter(s => !s.doctor || s.doctor === 'Dr. De Boeck');
   const rojasServices = services.filter(s => s.doctor === 'Dra. Rojas');

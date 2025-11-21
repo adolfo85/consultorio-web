@@ -22,7 +22,7 @@ const INITIAL_SERVICES: Service[] = [
     id: '2',
     name: 'Instalación de Brackets',
     durationMinutes: 90, // 1h 30m
-    price: 120000,
+    price: 0, // Precio 0 indica "Consultar" o valor variable
     description: 'Colocación completa de aparatología fija superior e inferior.',
     doctor: 'Dr. De Boeck'
   },
@@ -392,8 +392,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
       
-      {/* Navigation Bar */}
-      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+      {/* Navigation Bar - DISEÑO HORIZONTAL UNIFICADO */}
+      <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div 
@@ -407,9 +407,11 @@ const App: React.FC = () => {
                    className="w-full h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
                  />
               </div>
-              <div className="flex flex-col leading-none justify-center h-full">
-                <span className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-0.5">Consultorio odontológico</span>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">Rojas-De Boeck</span>
+              {/* Diseño de título horizontal homogeneizado */}
+              <div className="flex items-center h-full ml-3">
+                <span className="text-lg sm:text-xl font-semibold text-slate-700 tracking-tight leading-tight">
+                  Consultorio Odontológico <span className="text-teal-700 font-bold">Rojas-De Boeck</span>
+                </span>
               </div>
             </div>
             
@@ -436,15 +438,6 @@ const App: React.FC = () => {
                   <Lock className="w-4 h-4" />
                 </button>
               )}
-              
-              {view === ViewState.LANDING && (
-                <button 
-                  onClick={handleGeneralBooking}
-                  className="bg-teal-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg shadow-teal-200/50 hover:bg-teal-500 transition-all transform hover:-translate-y-0.5"
-                >
-                  Agendar cita
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -462,6 +455,10 @@ const App: React.FC = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 to-slate-900/20"></div>
               <div className="relative z-10 py-20 sm:py-32 px-8 sm:px-16 max-w-3xl">
+                {/* Subtítulo con tamaño aumentado */}
+                <p className="text-teal-300 font-bold tracking-wide uppercase text-xl sm:text-2xl mb-4 drop-shadow-md">
+                  Consultorio odontológico Rojas-De Boeck
+                </p>
                 <h1 className="text-4xl sm:text-6xl font-extrabold text-white mb-6 tracking-tight leading-tight">
                   Tu sonrisa en <br/>
                   <span className="text-teal-400">Manos Expertas</span>
@@ -498,7 +495,12 @@ const App: React.FC = () => {
                         <Stethoscope className="w-3 h-3" /> {s.durationMinutes} min
                     </span>
                     <span className="text-teal-700 font-bold">
-                      ${s.price.toLocaleString('es-AR')}
+                      {/* LOGICA PARA MOSTRAR PRECIO O 'CONSULTAR' */}
+                      {s.price > 0 ? (
+                          `$${s.price.toLocaleString('es-AR')}`
+                      ) : (
+                          'Consultar'
+                      )}
                     </span>
                   </div>
                 </div>

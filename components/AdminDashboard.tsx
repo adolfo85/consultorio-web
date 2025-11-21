@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Appointment, Service, WorkSchedule } from '../types';
 import { analyzeSchedule } from '../services/geminiService';
-import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff } from 'lucide-react';
+import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff, ShieldCheck } from 'lucide-react';
 
 interface AdminDashboardProps {
   appointments: Appointment[];
@@ -10,14 +10,14 @@ interface AdminDashboardProps {
   workSchedule: WorkSchedule;
   currentLogo?: string;
   blockedDates: string[];
-  currentUserRole: 'admin' | 'rojas'; // Identificar quién está logueado
-  onUpdateSchedule: (schedule: WorkSchedule, doctorKey: string) => void; // Modificado
+  currentUserRole: 'admin' | 'rojas'; 
+  onUpdateSchedule: (schedule: WorkSchedule, doctorKey: string) => void;
   onStatusChange: (id: string, status: 'confirmed' | 'cancelled') => void;
   onUpdateServices: (services: Service[]) => void;
   onDeleteServiceDB?: (id: string) => Promise<boolean>;
   onUpdateLogo?: (logo: string) => void;
   onRestoreDefaults?: () => Promise<void>;
-  onUpdateBlockedDates: (dates: string[], doctorKey: string) => void; // Modificado
+  onUpdateBlockedDates: (dates: string[], doctorKey: string) => void;
 }
 
 const DAYS_OF_WEEK = [
@@ -43,28 +43,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
-  // Default to today's date in local time
   const todayStr = new Date().toLocaleDateString('en-CA'); 
   const [filterDate, setFilterDate] = useState<string>(todayStr);
   const [blockDateInput, setBlockDateInput] = useState('');
 
   const [tempSchedule, setTempSchedule] = useState<WorkSchedule>(workSchedule);
-  
   const [editingService, setEditingService] = useState<Service | null>(null);
 
-  // Identify doctor name for display/logic
+  // Identificar doctor actual
   const doctorName = currentUserRole === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
   const doctorKey = currentUserRole === 'admin' ? 'dr_deboeck' : 'dra_rojas';
 
-  // Update local tempSchedule when prop changes (e.g. after refresh)
+  // Sincronizar el estado local cuando cambian las props (al cambiar de usuario o recargar)
   useEffect(() => {
       setTempSchedule(workSchedule);
   }, [workSchedule]);
 
-  // Filter appointments: Only show those for the logged-in doctor? 
-  // Or show all? Usually better to show all but maybe highlight yours.
-  // Requirement said "each one enters their session must have their separate calendar".
-  // So we filter appointments by doctor.
+  // Filtrar turnos SOLO del doctor logueado
   const myAppointments = appointments.filter(app => {
       const service = services.find(s => s.id === app.serviceId);
       const appDoctor = service?.doctor || 'Dr. De Boeck';
@@ -81,16 +76,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
-    // Analyze only my appointments
     const result = await analyzeSchedule(myAppointments, services, filterDate);
     setAiAnalysis(result);
     setIsAnalyzing(false);
   };
 
   const handleSaveSettings = () => {
-    // Pass the doctor key to update the correct row in DB
     onUpdateSchedule(tempSchedule, doctorKey);
-    alert(`Agenda de ${doctorName} guardada.`);
+    alert(`¡Guardado! La agenda de ${doctorName} ha sido actualizada.`);
   };
 
   const handleScheduleChange = (dayIndex: number, field: 'enabled' | 'start' | 'end', value: any) => {
@@ -124,12 +117,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           durationMinutes: 30,
           price: 0,
           description: '',
-          doctor: doctorName // Default to current user
+          doctor: doctorName
       });
   };
 
   const handleDeleteService = async (id: string) => {
-      if (confirm("¿Estás seguro de que quieres eliminar este servicio? Esta acción no se puede deshacer.")) {
+      if (confirm("¿Estás seguro de eliminar este servicio?")) {
           const success = await onDeleteServiceDB?.(id);
           if (success) {
               const updatedServices = services.filter(s => s.id !== id);
@@ -139,7 +132,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleRestore = async () => {
-      if (confirm("¿Estás seguro? Esto restaurará los servicios por defecto de ambos doctores.")) {
+      if (confirm("¿Restaurar servicios por defecto?")) {
           await onRestoreDefaults?.();
       }
   };
@@ -148,7 +141,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!editingService) return;
     
-    // Check if it is a new service (id not in current list) or update
     const exists = services.some(s => s.id === editingService.id);
     
     if (exists) {
@@ -161,12 +153,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingService(null);
   };
 
-  // Helper to handle file upload and convert to Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2000000) { 
-          alert("El archivo es muy grande. Se recomienda usar imágenes de menos de 2MB.");
+          alert("Imagen muy grande (max 2MB).");
       }
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -181,7 +172,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleCopyLink = () => {
     const link = window.location.origin;
     navigator.clipboard.writeText(link).then(() => {
-        alert("¡Link copiado!\n\n" + link + "\n\nComparte este link con tus pacientes para que reserven su turno.");
+        alert("¡Link copiado!\n\n" + link);
     });
   };
 
@@ -210,15 +201,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Panel de Administración</h2>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-teal-700 font-bold bg-teal-50 px-2 py-1 rounded-md text-sm">
-                {doctorName}
-            </p>
+            <div className="flex items-center gap-2 bg-teal-50 px-3 py-1 rounded-md border border-teal-100">
+                <ShieldCheck className="w-4 h-4 text-teal-600" />
+                <span className="text-teal-800 font-bold text-sm">{doctorName}</span>
+            </div>
             <span className="text-slate-300">|</span>
             <button 
                 onClick={handleCopyLink} 
-                className="text-teal-600 hover:text-teal-800 text-xs font-bold flex items-center gap-1 bg-teal-50 px-2 py-1 rounded-full hover:bg-teal-100 transition-colors"
+                className="text-slate-500 hover:text-slate-800 text-xs font-medium flex items-center gap-1 transition-colors"
             >
-                <Share2 className="w-3 h-3" /> Copiar Link
+                <Share2 className="w-3 h-3" /> Link Pacientes
             </button>
           </div>
         </div>
@@ -246,10 +238,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {tab === 'agenda' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Agenda Column */}
           <div className="lg:col-span-2 space-y-6">
-            
-            {/* TODAY'S REMINDERS PANEL */}
             {todaysAppointments.length > 0 && (
                 <div className="bg-gradient-to-r from-teal-50 to-white rounded-xl p-4 border border-teal-200 shadow-sm">
                     <h3 className="text-teal-800 font-bold flex items-center gap-2 mb-3">
@@ -265,7 +254,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <button 
                                     onClick={() => sendWhatsAppReminder(app, true)}
                                     className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full shadow-md transition-all"
-                                    title="Enviar Recordatorio Ahora"
+                                    title="Enviar Recordatorio"
                                 >
                                     <MessageCircle className="w-4 h-4" />
                                 </button>
@@ -279,7 +268,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <CalendarIcon className="w-5 h-5 text-teal-600" />
-                  Turnos Agendados ({doctorName})
+                  Turnos Agendados
                 </h3>
                 <input 
                   type="date" 
@@ -291,7 +280,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {filteredAppointments.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                  No hay turnos programados para esta fecha.
+                  No hay turnos para {doctorName} en esta fecha.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -302,58 +291,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div key={app.id} className={`flex flex-col sm:flex-row gap-4 p-4 rounded-lg border transition-all ${app.status === 'cancelled' ? 'bg-red-50 border-red-100 opacity-70' : 'bg-white border-slate-200 hover:border-teal-300 hover:shadow-md'}`}>
                         <div className="flex items-center sm:flex-col sm:justify-center sm:min-w-[100px] text-slate-700 bg-slate-50 rounded-md p-2">
                           <span className="text-lg font-bold">{app.time}</span>
-                          <span className="text-xs text-slate-400 hidden sm:block">hasta {app.endTime || '?'}</span>
                         </div>
-                        
                         <div className="flex-1">
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-bold text-slate-800 text-lg">{app.patientName}</h4>
-                              <p className="text-sm text-teal-700 font-medium flex items-center gap-1">
-                                {service?.name} 
-                                <span className="text-slate-400 font-normal text-xs">({service?.durationMinutes} min)</span>
+                              <p className="text-sm text-teal-700 font-medium">
+                                {service?.name} <span className="text-slate-400 text-xs">({service?.durationMinutes} min)</span>
                               </p>
                             </div>
-                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                              app.status === 'confirmed' ? 'bg-green-100 text-green-700' : 
-                              app.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100'
-                            }`}>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${app.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                               {app.status === 'confirmed' ? 'Confirmado' : 'Cancelado'}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-500 flex flex-col gap-1">
+                          <div className="mt-2 text-sm text-slate-500 flex flex-col gap-1">
                              <span className="flex items-center gap-2"><User className="w-3 h-3" /> {app.patientPhone}</span>
-                             {app.notes && <p className="italic text-slate-500 bg-slate-50 p-2 rounded mt-2 text-xs">Nota: "{app.notes}"</p>}
+                             {app.notes && <p className="italic text-slate-500 bg-slate-50 p-2 rounded mt-1 text-xs">"{app.notes}"</p>}
                           </div>
                         </div>
-
-                        <div className="flex sm:flex-col justify-end gap-2 mt-2 sm:mt-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 sm:pl-4">
+                        <div className="flex sm:flex-col justify-end gap-2 border-l border-slate-100 pl-4">
                           {app.status === 'confirmed' && (
-                            <button 
-                                onClick={() => sendWhatsAppReminder(app, isToday)}
-                                className="text-green-600 hover:bg-green-50 p-2 rounded-md transition-colors flex items-center gap-2"
-                                title={isToday ? "Enviar Recordatorio de HOY" : "Enviar Confirmación de Turno"}
-                            >
-                                <MessageCircle className="w-5 h-5" /> <span className="sm:hidden text-sm font-medium">WhatsApp</span>
+                            <button onClick={() => sendWhatsAppReminder(app, isToday)} className="text-green-600 hover:bg-green-50 p-2 rounded">
+                                <MessageCircle className="w-5 h-5" />
                             </button>
                           )}
-                          
-                          {app.status !== 'cancelled' && (
-                            <button 
-                              onClick={() => onStatusChange(app.id, 'cancelled')}
-                              className="text-red-500 hover:bg-red-50 p-2 rounded-md transition-colors flex items-center gap-2"
-                              title="Cancelar Turno"
-                            >
-                              <XCircle className="w-5 h-5" /> <span className="sm:hidden text-sm font-medium">Cancelar</span>
+                          {app.status !== 'cancelled' ? (
+                            <button onClick={() => onStatusChange(app.id, 'cancelled')} className="text-red-500 hover:bg-red-50 p-2 rounded">
+                              <XCircle className="w-5 h-5" />
                             </button>
-                          )}
-                          {app.status === 'cancelled' && (
-                            <button 
-                              onClick={() => onStatusChange(app.id, 'confirmed')}
-                              className="text-green-500 hover:bg-green-50 p-2 rounded-md transition-colors flex items-center gap-2"
-                              title="Reactivar Turno"
-                            >
-                              <CheckCircle className="w-5 h-5" /> <span className="sm:hidden text-sm font-medium">Reactivar</span>
+                          ) : (
+                            <button onClick={() => onStatusChange(app.id, 'confirmed')} className="text-green-500 hover:bg-green-50 p-2 rounded">
+                              <CheckCircle className="w-5 h-5" />
                             </button>
                           )}
                         </div>
@@ -365,34 +333,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Sidebar / AI Insights */}
+          {/* AI Sidebar */}
           <div className="space-y-6">
             <div className="bg-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 bg-teal-500 rounded-full blur-3xl opacity-20"></div>
               <div className="flex items-center justify-between mb-4 relative z-10">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-yellow-400" />
-                  Asistente IA
-                </h3>
-                <button 
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                  className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all flex items-center gap-1"
-                >
+                <h3 className="font-semibold flex items-center gap-2"><Sparkles className="w-5 h-5 text-yellow-400" /> Asistente IA</h3>
+                <button onClick={handleAnalyze} disabled={isAnalyzing} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all flex items-center gap-1">
                   {isAnalyzing ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Analizar'}
                 </button>
               </div>
-              
               <div className="min-h-[150px] text-sm leading-relaxed text-slate-300 relative z-10">
-                {aiAnalysis ? (
-                  <div className="prose prose-invert prose-sm">
-                    <p className="whitespace-pre-line">{aiAnalysis}</p>
-                  </div>
-                ) : (
-                  <p className="italic opacity-60">
-                    Utiliza Gemini para analizar la carga de trabajo de {doctorName}, estimar ingresos y recibir sugerencias.
-                  </p>
-                )}
+                {aiAnalysis ? <p className="whitespace-pre-line">{aiAnalysis}</p> : <p className="italic opacity-60">Analiza la carga de trabajo de {doctorName}.</p>}
               </div>
             </div>
           </div>
@@ -401,155 +353,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {tab === 'services' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-slate-800">Gestión de Servicios</h3>
-              <p className="text-sm text-slate-500">Modifica precios, duración y detalles de tus prestaciones.</p>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-                <button 
-                    onClick={handleRestore}
-                    className="flex-1 sm:flex-none border border-slate-300 text-slate-600 px-3 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors text-sm font-medium"
-                >
-                    <RefreshCcw className="w-4 h-4" /> Restaurar Servicios
-                </button>
-                <button 
-                    onClick={handleAddService}
-                    className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-teal-700 transition-colors shadow-md font-bold text-sm"
-                >
-                    <PlusCircle className="w-4 h-4" /> Nuevo Servicio
-                </button>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-bold text-slate-800">Servicios</h3>
+            <div className="flex gap-2">
+                <button onClick={handleRestore} className="border border-slate-300 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50"><RefreshCcw className="w-4 h-4" /></button>
+                <button onClick={handleAddService} className="bg-teal-600 text-white px-4 py-2 rounded-lg shadow-md font-bold text-sm flex items-center gap-2 hover:bg-teal-700"><PlusCircle className="w-4 h-4" /> Nuevo</button>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {services.map(service => (
-               <div key={service.id} className="border border-slate-200 rounded-xl p-4 hover:border-teal-300 transition-all bg-slate-50 group relative">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-100 mb-1 inline-block ${service.doctor === 'Dra. Rojas' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
-                          {service.doctor || 'Dr. De Boeck'}
-                      </span>
-                      <h4 className="font-bold text-slate-800 pr-8">{service.name}</h4>
-                      <div className="flex items-center gap-3 mt-2 text-sm">
-                        <span className="flex items-center text-slate-600 bg-white px-2 py-1 rounded border border-slate-100">
-                           <Clock className="w-3 h-3 mr-1" /> {service.durationMinutes} min
-                        </span>
-                        <span className="flex items-center text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100 font-bold">
-                           <DollarSign className="w-3 h-3 mr-1" /> {service.price.toLocaleString('es-AR')}
-                        </span>
-                      </div>
-                    </div>
+               <div key={service.id} className="border border-slate-200 rounded-xl p-4 hover:border-teal-300 bg-slate-50 relative">
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-100 mb-1 inline-block ${service.doctor === 'Dra. Rojas' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
+                      {service.doctor || 'Dr. De Boeck'}
+                  </span>
+                  <h4 className="font-bold text-slate-800 pr-12">{service.name}</h4>
+                  <div className="flex items-center gap-3 mt-2 text-sm">
+                    <span className="text-slate-600 bg-white px-2 py-1 rounded border border-slate-100"><Clock className="w-3 h-3 mr-1 inline" /> {service.durationMinutes} min</span>
+                    <span className="flex items-center text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100 font-bold">
+                        {service.price > 0 ? (
+                            <><DollarSign className="w-3 h-3 mr-1 inline" /> {service.price.toLocaleString('es-AR')}</>
+                        ) : 'Consultar'}
+                    </span>
                   </div>
-                  
                   <div className="absolute top-4 right-4 flex gap-2">
-                    <button 
-                        onClick={() => setEditingService(service)}
-                        className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-colors"
-                        title="Editar"
-                    >
-                        <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                        onClick={() => handleDeleteService(service.id)}
-                        className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-                        title="Eliminar"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button onClick={() => setEditingService(service)} className="p-2 bg-white border border-slate-200 rounded hover:text-teal-700"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => handleDeleteService(service.id)} className="p-2 bg-white border border-slate-200 rounded hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
                   </div>
                </div>
              ))}
           </div>
-
-          {/* Edit/Create Service Modal */}
           {editingService && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl animate-fade-in-up">
                 <div className="flex justify-between items-center mb-6">
-                   <h3 className="text-xl font-bold text-slate-800">
-                       {services.some(s => s.id === editingService.id) ? 'Editar Servicio' : 'Nuevo Servicio'}
-                   </h3>
-                   <button onClick={() => setEditingService(null)} className="text-slate-400 hover:text-slate-600">
-                     <XCircle className="w-6 h-6" />
-                   </button>
+                   <h3 className="text-xl font-bold text-slate-800">{services.some(s => s.id === editingService.id) ? 'Editar' : 'Nuevo'} Servicio</h3>
+                   <button onClick={() => setEditingService(null)}><XCircle className="w-6 h-6 text-slate-400" /></button>
                 </div>
-                
                 <form onSubmit={handleSaveService} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Servicio</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={editingService.name}
-                      onChange={(e) => setEditingService({...editingService, name: e.target.value})}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
-                      placeholder="Ej: Blanqueamiento Dental"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Profesional Asignado</label>
-                    <select 
-                        value={editingService.doctor || 'Dr. De Boeck'}
-                        onChange={(e) => setEditingService({...editingService, doctor: e.target.value})}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
-                    >
-                        <option value="Dr. De Boeck">Dr. De Boeck (Ortodoncia)</option>
-                        <option value="Dra. Rojas">Dra. Rojas (Odontología Gral)</option>
-                    </select>
-                  </div>
-                  
+                  <input type="text" required value={editingService.name} onChange={(e) => setEditingService({...editingService, name: e.target.value})} className="w-full border p-2 rounded" placeholder="Nombre" />
+                  <select value={editingService.doctor || doctorName} onChange={(e) => setEditingService({...editingService, doctor: e.target.value})} className="w-full border p-2 rounded">
+                        <option value="Dr. De Boeck">Dr. De Boeck</option>
+                        <option value="Dra. Rojas">Dra. Rojas</option>
+                  </select>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Precio (ARS)</label>
-                      <input 
-                        type="number" 
-                        required
-                        value={editingService.price}
-                        onChange={(e) => setEditingService({...editingService, price: Number(e.target.value)})}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Duración (minutos)</label>
-                      <input 
-                        type="number" 
-                        required
-                        step="5"
-                        value={editingService.durationMinutes}
-                        onChange={(e) => setEditingService({...editingService, durationMinutes: Number(e.target.value)})}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
-                      />
-                    </div>
+                    <input type="number" required value={editingService.price} onChange={(e) => setEditingService({...editingService, price: Number(e.target.value)})} className="w-full border p-2 rounded" placeholder="Precio" />
+                    <input type="number" required step="5" value={editingService.durationMinutes} onChange={(e) => setEditingService({...editingService, durationMinutes: Number(e.target.value)})} className="w-full border p-2 rounded" placeholder="Minutos" />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
-                    <textarea 
-                      required
-                      value={editingService.description}
-                      onChange={(e) => setEditingService({...editingService, description: e.target.value})}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none h-24 resize-none bg-white text-slate-900"
-                      placeholder="Breve descripción del tratamiento..."
-                    />
-                  </div>
-
-                  <div className="flex gap-3 mt-6">
-                    <button 
-                      type="button"
-                      onClick={() => setEditingService(null)}
-                      className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-600 font-medium hover:bg-slate-50 bg-white"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      type="submit"
-                      className="flex-1 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 shadow-lg shadow-teal-200/50"
-                    >
-                      {services.some(s => s.id === editingService.id) ? 'Guardar Cambios' : 'Crear Servicio'}
-                    </button>
-                  </div>
+                  <textarea required value={editingService.description} onChange={(e) => setEditingService({...editingService, description: e.target.value})} className="w-full border p-2 rounded h-24" placeholder="Descripción" />
+                  <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded font-bold">Guardar</button>
                 </form>
               </div>
             </div>
@@ -560,9 +411,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {tab === 'settings' && (
         <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
            
-           {/* Left Column: Logo & Blocked Dates */}
+           {/* Left Column */}
            <div className="space-y-8">
-               {/* Logo Config - Only Admin (De Boeck) can change logo for now, or both */}
                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
                    <div className="mb-6 border-b border-slate-100 pb-4">
                         <h3 className="text-xl font-bold text-slate-800">Identidad</h3>
@@ -573,114 +423,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <img src={currentLogo} alt="Current Logo" className="w-full h-full object-contain" />
                         </div>
                         <label className="inline-flex items-center cursor-pointer">
-                            <div className="flex items-center justify-center py-2 px-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-colors shadow-md">
-                                <Upload className="w-4 h-4 mr-2" /> Subir Logo
+                            <div className="flex items-center justify-center py-2 px-4 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium shadow-md">
+                                <Upload className="w-4 h-4 mr-2" /> Subir
                             </div>
-                            <input 
-                                type="file" 
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => onUpdateLogo && handleImageUpload(e, onUpdateLogo)}
-                            />
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => onUpdateLogo && handleImageUpload(e, onUpdateLogo)} />
                         </label>
                     </div>
                </div>
 
-               {/* Blocked Dates Config - SPECIFIC FOR LOGGED IN DOCTOR */}
-               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 border-l-4 border-l-red-500">
                    <div className="mb-6 border-b border-slate-100 pb-4">
                         <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                             <CalendarOff className="w-5 h-5 text-red-500" />
                             Días Bloqueados
                         </h3>
-                        <p className="text-sm text-slate-500">
-                            Días libres para <strong>{doctorName}</strong>.
+                        <p className="text-sm text-slate-600">
+                            Agenda de: <strong className="text-slate-900 bg-slate-100 px-1 rounded">{doctorName}</strong>
                         </p>
                     </div>
-                    
                     <div className="flex gap-2 mb-4">
-                        <input 
-                            type="date" 
-                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 flex-1"
-                            value={blockDateInput}
-                            onChange={(e) => setBlockDateInput(e.target.value)}
-                        />
-                        <button 
-                            onClick={handleAddBlockedDate}
-                            disabled={!blockDateInput}
-                            className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
-                        >
-                            Bloquear
-                        </button>
+                        <input type="date" className="border border-slate-300 rounded px-3 py-2 text-sm flex-1" value={blockDateInput} onChange={(e) => setBlockDateInput(e.target.value)} />
+                        <button onClick={handleAddBlockedDate} disabled={!blockDateInput} className="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold disabled:opacity-50">Bloquear</button>
                     </div>
-
-                    {blockedDates.length === 0 ? (
-                        <p className="text-sm text-slate-400 italic">No hay fechas bloqueadas para ti.</p>
-                    ) : (
-                        <div className="flex flex-wrap gap-2">
-                            {blockedDates.map(date => (
-                                <div key={date} className="bg-red-50 border border-red-100 text-red-700 text-sm px-3 py-1 rounded-full flex items-center gap-2">
-                                    {new Date(date).toLocaleDateString('es-ES', {day: 'numeric', month: 'numeric'})}
-                                    <button onClick={() => handleRemoveBlockedDate(date)} className="hover:text-red-900">
-                                        <XCircle className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                        {blockedDates.length === 0 && <span className="text-slate-400 italic text-sm">No hay bloqueos.</span>}
+                        {blockedDates.map(date => (
+                            <div key={date} className="bg-red-50 border border-red-100 text-red-700 text-xs px-3 py-1 rounded-full flex items-center gap-2">
+                                {new Date(date).toLocaleDateString('es-ES', {day: 'numeric', month: 'numeric'})}
+                                <button onClick={() => handleRemoveBlockedDate(date)}><XCircle className="w-3 h-3 hover:text-red-900" /></button>
+                            </div>
+                        ))}
+                    </div>
                </div>
            </div>
 
            {/* Right Column: Weekly Schedule */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 border-l-4 border-l-teal-500">
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                 <div>
-                <h3 className="text-xl font-bold text-slate-800">Horarios Semanales</h3>
-                <p className="text-sm text-slate-500">Agenda habitual de <strong>{doctorName}</strong>.</p>
+                    <h3 className="text-xl font-bold text-slate-800">Horarios Semanales</h3>
+                    <p className="text-sm text-slate-600">
+                        Configurando: <strong className="text-slate-900 bg-slate-100 px-1 rounded">{doctorName}</strong>
+                    </p>
                 </div>
-                <button 
-                onClick={handleSaveSettings}
-                className="bg-teal-600 text-white px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-teal-700 transition-colors shadow-sm text-sm font-bold"
-                >
-                <Save className="w-4 h-4" /> Guardar
+                <button onClick={handleSaveSettings} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center gap-2 hover:bg-teal-700 shadow-sm text-sm font-bold">
+                    <Save className="w-4 h-4" /> Guardar
                 </button>
             </div>
-
             <div className="space-y-3">
                 {DAYS_OF_WEEK.map((dayName, index) => {
                 const config = tempSchedule[index] || { enabled: false, start: "09:00", end: "18:00" };
-                
                 return (
                     <div key={index} className={`flex items-center gap-2 p-3 rounded-lg border ${config.enabled ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent opacity-60'}`}>
-                    <div className="w-28">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            checked={config.enabled}
-                            onChange={(e) => handleScheduleChange(index, 'enabled', e.target.checked)}
-                            className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 border-gray-300"
-                        />
-                        <span className={`text-sm font-medium ${config.enabled ? 'text-slate-800' : 'text-slate-500'}`}>{dayName}</span>
-                        </label>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-1">
-                        <input 
-                            type="time" 
-                            disabled={!config.enabled}
-                            value={config.start}
-                            onChange={(e) => handleScheduleChange(index, 'start', e.target.value)}
-                            className="border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 bg-white text-slate-900 w-20"
-                        />
-                        <span className="text-slate-300">-</span>
-                        <input 
-                            type="time" 
-                            disabled={!config.enabled}
-                            value={config.end}
-                            onChange={(e) => handleScheduleChange(index, 'end', e.target.value)}
-                            className="border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 bg-white text-slate-900 w-20"
-                        />
-                    </div>
+                        <div className="w-28">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={config.enabled} onChange={(e) => handleScheduleChange(index, 'enabled', e.target.checked)} className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 border-gray-300" />
+                            <span className={`text-sm font-medium ${config.enabled ? 'text-slate-800' : 'text-slate-500'}`}>{dayName}</span>
+                            </label>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                            <input type="time" disabled={!config.enabled} value={config.start} onChange={(e) => handleScheduleChange(index, 'start', e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs w-20" />
+                            <span className="text-slate-300">-</span>
+                            <input type="time" disabled={!config.enabled} value={config.end} onChange={(e) => handleScheduleChange(index, 'end', e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-xs w-20" />
+                        </div>
                     </div>
                 );
                 })}

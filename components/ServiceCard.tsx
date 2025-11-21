@@ -49,8 +49,14 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service, selected, onS
               {service.durationMinutes} min
             </div>
             <div className="flex items-center text-sm font-bold text-slate-800">
-              <DollarSign className="w-3 h-3 mr-0.5 text-slate-400" />
-              {service.price.toLocaleString('es-AR')}
+              {service.price > 0 ? (
+                <>
+                  <DollarSign className="w-3 h-3 mr-0.5 text-slate-400" />
+                  {service.price.toLocaleString('es-AR')}
+                </>
+              ) : (
+                <span className="text-slate-500 font-medium text-xs uppercase tracking-wider italic">Consultar</span>
+              )}
             </div>
         </div>
       </div>
