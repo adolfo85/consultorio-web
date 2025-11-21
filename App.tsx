@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ViewState, Service, Appointment, WorkSchedule, DoctorConfigMap, FAQ } from './types';
 import { PatientBooking } from './components/PatientBooking';
@@ -253,18 +252,27 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveFAQ = async (faq: FAQ) => {
+  const handleSaveFAQ = async (faq: FAQ): Promise<boolean> => {
       if (isSupabaseConfigured()) {
-          // Si tiene ID, es update. Si no, es insert
-          const payload = faq.id ? faq : { question: faq.question, answer: faq.answer };
-          
-          const { error } = await supabase.from('faqs').upsert(payload);
-          if (!error) {
+          try {
+              // Si tiene ID, es update. Si no, es insert (quitamos el ID vacío para que Postgres genere uno)
+              const payload = faq.id ? { id: faq.id, question: faq.question, answer: faq.answer } : { question: faq.question, answer: faq.answer };
+              
+              const { error } = await supabase.from('faqs').upsert(payload);
+              
+              if (error) {
+                  console.error("Supabase Error:", error);
+                  throw error;
+              }
+              
               fetchData();
-          } else {
-              alert("Error al guardar pregunta.");
+              return true;
+          } catch (error: any) {
+              alert(`Error al guardar pregunta: ${error.message || JSON.stringify(error)}. (Revise que ejecutó el script SQL en Supabase)`);
+              return false;
           }
       }
+      return false;
   };
 
   const handleDeleteFAQ = async (id: string) => {
@@ -272,6 +280,8 @@ const App: React.FC = () => {
           const { error } = await supabase.from('faqs').delete().eq('id', id);
           if (!error) {
               setFaqs(prev => prev.filter(f => f.id !== id));
+          } else {
+              alert(`Error al eliminar: ${error.message}`);
           }
       }
   };
@@ -339,6 +349,9 @@ const App: React.FC = () => {
     setView(ViewState.LANDING);
   };
 
+  const currentAdminDoctorName = currentUser === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
+  const currentAdminConfig = doctorConfigs[currentAdminDoctorName] || doctorConfigs['Dr. De Boeck'];
+
   if (isLoading) {
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-400">
@@ -358,9 +371,6 @@ const App: React.FC = () => {
           </div>
       )
   }
-
-  const currentAdminName = currentUser === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
-  const currentAdminConfig = doctorConfigs[currentAdminName] || { schedule: DEFAULT_SCHEDULE, blockedDates: [] };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
@@ -404,7 +414,6 @@ const App: React.FC = () => {
                 <button onClick={handleGeneralBooking} className="bg-teal-500 hover:bg-teal-400 text-white text-lg px-8 py-4 rounded-full font-bold shadow-xl transition-all transform hover:-translate-y-1 flex items-center gap-2 group">Agendar cita <span className="group-hover:translate-x-1 transition-transform">→</span></button>
               </div>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
               {services.map(s => (
                 <div key={s.id} className="bg-sky-50 rounded-xl shadow-sm border border-sky-100 hover:shadow-lg hover:border-teal-200 transition-all group overflow-hidden cursor-pointer p-6 flex flex-col h-full justify-between" onClick={() => handleBookFromLanding(s)}>
@@ -420,10 +429,7 @@ const App: React.FC = () => {
                 </div>
               ))}
             </div>
-            
             <div className="mt-16 mb-8"><WorkCarousel /></div>
-            
-            {/* FAQ Section Added Here */}
             <div className="mt-8 mb-16"><FAQSection faqs={faqs} /></div>
           </div>
         )}

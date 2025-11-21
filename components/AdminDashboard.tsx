@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Appointment, Service, WorkSchedule, FAQ } from '../types';
 import { analyzeSchedule } from '../services/geminiService';
-import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff, ShieldCheck, HelpCircle, Loader2 } from 'lucide-react';
 
 interface AdminDashboardProps {
   appointments: Appointment[];
@@ -19,8 +18,9 @@ interface AdminDashboardProps {
   onUpdateLogo?: (logo: string) => void;
   onRestoreDefaults?: () => Promise<void>;
   onUpdateBlockedDates: (dates: string[], doctorKey: string) => void;
-  onSaveFAQ: (faq: FAQ) => void;
-  onDeleteFAQ: (id: string) => void;
+  // Cambiado a promesa que retorna boolean para saber si cerrar el modal o no
+  onSaveFAQ: (faq: FAQ) => Promise<boolean>;
+  onDeleteFAQ: (id: string) => Promise<void>;
 }
 
 const DAYS_OF_WEEK = [
@@ -55,7 +55,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const [tempSchedule, setTempSchedule] = useState<WorkSchedule>(workSchedule);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  
+  // FAQ State
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
+  const [isSavingFAQ, setIsSavingFAQ] = useState(false);
 
   const doctorName = currentUserRole === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
   const doctorKey = currentUserRole === 'admin' ? 'dr_deboeck' : 'dra_rojas';
@@ -157,15 +160,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingService(null);
   };
 
+  // FAQ Handlers
   const handleAddFAQ = () => {
       setEditingFAQ({ id: '', question: '', answer: '' });
   };
 
-  const handleSubmitFAQ = (e: React.FormEvent) => {
+  const handleSubmitFAQ = async (e: React.FormEvent) => {
       e.preventDefault();
       if (editingFAQ) {
-          onSaveFAQ(editingFAQ);
-          setEditingFAQ(null);
+          setIsSavingFAQ(true);
+          // Esperamos a ver si se guardó correctamente
+          const success = await onSaveFAQ(editingFAQ);
+          setIsSavingFAQ(false);
+          
+          // Solo cerramos si fue exitoso
+          if (success) {
+              setEditingFAQ(null);
+          }
       }
   };
 
@@ -323,7 +334,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* FAQs Management Tab */}
       {tab === 'faqs' && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex justify-between items-center mb-6">
@@ -363,7 +373,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   <label className="block text-sm font-medium text-slate-700 mb-1">Respuesta</label>
                                   <textarea required className="w-full border p-2 rounded bg-white text-slate-900 h-32 resize-none" value={editingFAQ.answer} onChange={(e) => setEditingFAQ({...editingFAQ, answer: e.target.value})} placeholder="Respuesta clara." />
                               </div>
-                              <button type="submit" className="w-full bg-teal-600 text-white p-2 rounded font-bold hover:bg-teal-700">Guardar</button>
+                              <button 
+                                type="submit" 
+                                disabled={isSavingFAQ}
+                                className="w-full bg-teal-600 text-white p-2 rounded font-bold hover:bg-teal-700 disabled:opacity-70 flex justify-center items-center gap-2"
+                              >
+                                {isSavingFAQ ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : "Guardar"}
+                              </button>
                           </form>
                       </div>
                   </div>
