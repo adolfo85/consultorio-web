@@ -51,3 +51,9 @@ export interface DoctorConfig {
 export interface DoctorConfigMap {
     [doctorName: string]: DoctorConfig;
 }
+
+export interface FAQ {
+    id: string;
+    question: string;
+    answer: string;
+}
