@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Loader2, Sparkles } from 'lucide-react';
 import { Service, WorkSchedule } from '../types';
@@ -40,6 +39,15 @@ export const PatientChatBot: React.FC<PatientChatBotProps> = ({ services, workSc
     setIsTyping(true);
 
     try {
+      // Acceso seguro a la API Key inyectada por Vite
+      // Vite reemplazará 'process.env.API_KEY' con el valor real string durante el build
+      const apiKey = process.env.API_KEY;
+
+      if (!apiKey || apiKey === 'DUMMY_KEY') {
+          console.warn("API Key no encontrada o inválida.");
+          throw new Error("Falta configuración de API Key");
+      }
+
       // Preparar el contexto para la IA
       const context = `
         Eres un asistente amable y profesional del Consultorio Odontológico Rojas-De Boeck.
@@ -60,25 +68,20 @@ export const PatientChatBot: React.FC<PatientChatBotProps> = ({ services, workSc
         
         Pregunta del paciente: "${userMessage}"
       `;
-
-      // Llamada a la API (usando la misma config que ya tenías)
-      const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) 
-        ? process.env.API_KEY 
-        : '';
       
-      const ai = new GoogleGenAI({ apiKey: apiKey || 'DUMMY_KEY' });
+      const ai = new GoogleGenAI({ apiKey: apiKey });
       
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: context,
       });
 
-      const botResponse = response.text || "Lo siento, no pude procesar tu consulta en este momento. Por favor intenta agendar un turno.";
+      const botResponse = response.text || "Lo siento, no pude procesar tu consulta. Por favor intenta agendar un turno.";
       
       setMessages(prev => [...prev, { role: 'model', text: botResponse }]);
     } catch (error) {
       console.error("Error chat:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "Tuve un problema de conexión. Por favor intenta nuevamente o contáctanos por WhatsApp." }]);
+      setMessages(prev => [...prev, { role: 'model', text: "Estoy teniendo problemas de conexión momentáneos. Te sugiero consultar por WhatsApp o agendar un turno directamente." }]);
     } finally {
       setIsTyping(false);
     }
