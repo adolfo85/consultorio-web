@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Appointment, Service, WorkSchedule } from '../types';
 import { analyzeSchedule } from '../services/geminiService';
 import { Calendar as CalendarIcon, User, Clock, CheckCircle, XCircle, Sparkles, RefreshCw, Settings, Save, Briefcase, Edit2, DollarSign, Share2, Upload, Image as ImageIcon, MessageCircle, Bell, Trash2, PlusCircle, RefreshCcw, CalendarOff } from 'lucide-react';
@@ -9,14 +9,15 @@ interface AdminDashboardProps {
   services: Service[];
   workSchedule: WorkSchedule;
   currentLogo?: string;
-  blockedDates: string[]; // Nueva propiedad
-  onUpdateSchedule: (schedule: WorkSchedule) => void;
+  blockedDates: string[];
+  currentUserRole: 'admin' | 'rojas'; // Identificar quién está logueado
+  onUpdateSchedule: (schedule: WorkSchedule, doctorKey: string) => void; // Modificado
   onStatusChange: (id: string, status: 'confirmed' | 'cancelled') => void;
   onUpdateServices: (services: Service[]) => void;
   onDeleteServiceDB?: (id: string) => Promise<boolean>;
   onUpdateLogo?: (logo: string) => void;
   onRestoreDefaults?: () => Promise<void>;
-  onUpdateBlockedDates: (dates: string[]) => void; // Nueva función
+  onUpdateBlockedDates: (dates: string[], doctorKey: string) => void; // Modificado
 }
 
 const DAYS_OF_WEEK = [
@@ -29,6 +30,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   workSchedule, 
   currentLogo,
   blockedDates = [],
+  currentUserRole,
   onUpdateSchedule, 
   onStatusChange,
   onUpdateServices,
@@ -50,24 +52,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   
   const [editingService, setEditingService] = useState<Service | null>(null);
 
-  const filteredAppointments = appointments
+  // Identify doctor name for display/logic
+  const doctorName = currentUserRole === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
+  const doctorKey = currentUserRole === 'admin' ? 'dr_deboeck' : 'dra_rojas';
+
+  // Update local tempSchedule when prop changes (e.g. after refresh)
+  useEffect(() => {
+      setTempSchedule(workSchedule);
+  }, [workSchedule]);
+
+  // Filter appointments: Only show those for the logged-in doctor? 
+  // Or show all? Usually better to show all but maybe highlight yours.
+  // Requirement said "each one enters their session must have their separate calendar".
+  // So we filter appointments by doctor.
+  const myAppointments = appointments.filter(app => {
+      const service = services.find(s => s.id === app.serviceId);
+      const appDoctor = service?.doctor || 'Dr. De Boeck';
+      return appDoctor === doctorName;
+  });
+
+  const filteredAppointments = myAppointments
     .filter(app => app.date === filterDate)
     .sort((a, b) => a.time.localeCompare(b.time));
 
-  const todaysAppointments = appointments
+  const todaysAppointments = myAppointments
     .filter(app => app.date === todayStr && app.status === 'confirmed')
     .sort((a, b) => a.time.localeCompare(b.time));
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
-    const result = await analyzeSchedule(appointments, services, filterDate);
+    // Analyze only my appointments
+    const result = await analyzeSchedule(myAppointments, services, filterDate);
     setAiAnalysis(result);
     setIsAnalyzing(false);
   };
 
   const handleSaveSettings = () => {
-    onUpdateSchedule(tempSchedule);
-    alert("Configuración de horarios semanales guardada.");
+    // Pass the doctor key to update the correct row in DB
+    onUpdateSchedule(tempSchedule, doctorKey);
+    alert(`Agenda de ${doctorName} guardada.`);
   };
 
   const handleScheduleChange = (dayIndex: number, field: 'enabled' | 'start' | 'end', value: any) => {
@@ -84,14 +107,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (!blockDateInput) return;
       if (!blockedDates.includes(blockDateInput)) {
           const newDates = [...blockedDates, blockDateInput].sort();
-          onUpdateBlockedDates(newDates);
+          onUpdateBlockedDates(newDates, doctorKey);
       }
       setBlockDateInput('');
   };
 
   const handleRemoveBlockedDate = (dateToRemove: string) => {
       const newDates = blockedDates.filter(d => d !== dateToRemove);
-      onUpdateBlockedDates(newDates);
+      onUpdateBlockedDates(newDates, doctorKey);
   };
 
   const handleAddService = () => {
@@ -101,7 +124,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           durationMinutes: 30,
           price: 0,
           description: '',
-          doctor: 'Dr. De Boeck'
+          doctor: doctorName // Default to current user
       });
   };
 
@@ -168,11 +191,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     
     let message = '';
     if (isToday) {
-        message = `Hola ${app.patientName}, te escribo del Consultorio Rojas-De Boeck para recordarte que HOY tienes turno a las ${app.time} hs para ${service?.name}. Te esperamos!`;
+        message = `Hola ${app.patientName}, te escribo del Consultorio Rojas-De Boeck para recordarte que HOY tienes turno a las ${app.time} hs para ${service?.name} con ${doctorName}. Te esperamos!`;
     } else {
         const [y, m, d] = app.date.split('-');
         const readableDate = `${d}/${m}`;
-        message = `Hola ${app.patientName}, te confirmamos tu turno en Consultorio Rojas-De Boeck para el día ${readableDate} a las ${app.time} hs. Tratamiento: ${service?.name}. Por favor confirmar. Gracias.`;
+        message = `Hola ${app.patientName}, te confirmamos tu turno en Consultorio Rojas-De Boeck para el día ${readableDate} a las ${app.time} hs. Tratamiento: ${service?.name} con ${doctorName}. Por favor confirmar. Gracias.`;
     }
     
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
@@ -187,13 +210,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Panel de Administración</h2>
           <div className="flex items-center gap-3 mt-1">
-            <p className="text-slate-500">Consultorio Rojas-De Boeck</p>
+            <p className="text-teal-700 font-bold bg-teal-50 px-2 py-1 rounded-md text-sm">
+                {doctorName}
+            </p>
             <span className="text-slate-300">|</span>
             <button 
                 onClick={handleCopyLink} 
                 className="text-teal-600 hover:text-teal-800 text-xs font-bold flex items-center gap-1 bg-teal-50 px-2 py-1 rounded-full hover:bg-teal-100 transition-colors"
             >
-                <Share2 className="w-3 h-3" /> Copiar Link para Pacientes
+                <Share2 className="w-3 h-3" /> Copiar Link
             </button>
           </div>
         </div>
@@ -254,7 +279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <CalendarIcon className="w-5 h-5 text-teal-600" />
-                  Turnos Agendados
+                  Turnos Agendados ({doctorName})
                 </h3>
                 <input 
                   type="date" 
@@ -288,7 +313,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 {service?.name} 
                                 <span className="text-slate-400 font-normal text-xs">({service?.durationMinutes} min)</span>
                               </p>
-                              {service?.doctor && <span className="text-xs bg-slate-100 text-slate-500 px-1 rounded">{service.doctor}</span>}
                             </div>
                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                               app.status === 'confirmed' ? 'bg-green-100 text-green-700' : 
@@ -366,23 +390,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 ) : (
                   <p className="italic opacity-60">
-                    Utiliza Gemini para analizar la carga de trabajo del día seleccionado, estimar ingresos y recibir sugerencias operativas.
+                    Utiliza Gemini para analizar la carga de trabajo de {doctorName}, estimar ingresos y recibir sugerencias.
                   </p>
                 )}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-800 mb-4 text-sm uppercase tracking-wider">Métricas</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <span className="block text-2xl font-bold text-teal-700">{appointments.filter(a => a.status === 'confirmed').length}</span>
-                  <span className="text-xs text-slate-500 font-medium">Turnos Totales</span>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <span className="block text-2xl font-bold text-slate-700">{appointments.filter(a => a.status === 'cancelled').length}</span>
-                  <span className="text-xs text-slate-500 font-medium">Cancelaciones</span>
-                </div>
               </div>
             </div>
           </div>
@@ -417,7 +427,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                <div key={service.id} className="border border-slate-200 rounded-xl p-4 hover:border-teal-300 transition-all bg-slate-50 group relative">
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex-1">
-                      <span className="text-[10px] font-bold uppercase bg-white px-2 py-0.5 rounded text-slate-400 border border-slate-100 mb-1 inline-block">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-100 mb-1 inline-block ${service.doctor === 'Dra. Rojas' ? 'bg-purple-100 text-purple-600' : 'bg-teal-100 text-teal-600'}`}>
                           {service.doctor || 'Dr. De Boeck'}
                       </span>
                       <h4 className="font-bold text-slate-800 pr-8">{service.name}</h4>
@@ -552,11 +562,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
            
            {/* Left Column: Logo & Blocked Dates */}
            <div className="space-y-8">
-               {/* Logo Config */}
+               {/* Logo Config - Only Admin (De Boeck) can change logo for now, or both */}
                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
                    <div className="mb-6 border-b border-slate-100 pb-4">
                         <h3 className="text-xl font-bold text-slate-800">Identidad</h3>
-                        <p className="text-sm text-slate-500">Personaliza el logo.</p>
+                        <p className="text-sm text-slate-500">Personaliza el logo (Global).</p>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center p-2">
@@ -576,14 +586,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                </div>
 
-               {/* Blocked Dates Config */}
+               {/* Blocked Dates Config - SPECIFIC FOR LOGGED IN DOCTOR */}
                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
                    <div className="mb-6 border-b border-slate-100 pb-4">
                         <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                             <CalendarOff className="w-5 h-5 text-red-500" />
                             Días Bloqueados
                         </h3>
-                        <p className="text-sm text-slate-500">Feriados o días libres específicos.</p>
+                        <p className="text-sm text-slate-500">
+                            Días libres para <strong>{doctorName}</strong>.
+                        </p>
                     </div>
                     
                     <div className="flex gap-2 mb-4">
@@ -603,7 +615,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     {blockedDates.length === 0 ? (
-                        <p className="text-sm text-slate-400 italic">No hay fechas bloqueadas.</p>
+                        <p className="text-sm text-slate-400 italic">No hay fechas bloqueadas para ti.</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
                             {blockedDates.map(date => (
@@ -624,7 +636,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                 <div>
                 <h3 className="text-xl font-bold text-slate-800">Horarios Semanales</h3>
-                <p className="text-sm text-slate-500">Agenda habitual.</p>
+                <p className="text-sm text-slate-500">Agenda habitual de <strong>{doctorName}</strong>.</p>
                 </div>
                 <button 
                 onClick={handleSaveSettings}

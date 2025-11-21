@@ -42,3 +42,12 @@ export interface WorkDayConfig {
 export interface WorkSchedule {
   [key: number]: WorkDayConfig; // 0 (Sun) to 6 (Sat)
 }
+
+export interface DoctorConfig {
+    schedule: WorkSchedule;
+    blockedDates: string[];
+}
+
+export interface DoctorConfigMap {
+    [doctorName: string]: DoctorConfig;
+}

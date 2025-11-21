@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { ViewState, Service, Appointment, WorkSchedule } from './types';
+import { ViewState, Service, Appointment, WorkSchedule, DoctorConfigMap } from './types';
 import { PatientBooking } from './components/PatientBooking';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WorkCarousel } from './components/WorkCarousel';
@@ -77,8 +78,14 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(ViewState.LANDING);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
-  const [workSchedule, setWorkSchedule] = useState<WorkSchedule>(DEFAULT_SCHEDULE);
-  const [blockedDates, setBlockedDates] = useState<string[]>([]); // State for blocked dates
+  
+  // MULTI-DOCTOR CONFIG STATE
+  // We store a map of doctor configs keyed by doctor name
+  const [doctorConfigs, setDoctorConfigs] = useState<DoctorConfigMap>({
+      'Dr. De Boeck': { schedule: DEFAULT_SCHEDULE, blockedDates: [] },
+      'Dra. Rojas': { schedule: DEFAULT_SCHEDULE, blockedDates: [] }
+  });
+
   const [logo, setLogo] = useState<string>(DEFAULT_LOGO);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -100,18 +107,7 @@ const App: React.FC = () => {
   const fetchData = async () => {
     setConnectionError(null);
     if (!isSupabaseConfigured()) {
-      // Local storage fallback
-      const storedApps = localStorage.getItem('rojas_deboeck_appointments');
-      if (storedApps) setAppointments(JSON.parse(storedApps));
-      const storedSchedule = localStorage.getItem('rojas_deboeck_schedule');
-      if (storedSchedule) setWorkSchedule(JSON.parse(storedSchedule));
-      const storedServices = localStorage.getItem('rojas_deboeck_services');
-      if (storedServices) setServices(JSON.parse(storedServices));
-      const storedLogo = localStorage.getItem('rojas_deboeck_logo');
-      if (storedLogo) setLogo(storedLogo);
-      const storedBlocked = localStorage.getItem('rojas_deboeck_blocked');
-      if (storedBlocked) setBlockedDates(JSON.parse(storedBlocked));
-      
+      // Local storage fallback is deprecated for this multi-doctor feature complexity, but kept simple
       setIsLoading(false);
       return;
     }
@@ -138,13 +134,32 @@ const App: React.FC = () => {
         setServices(INITIAL_SERVICES);
       }
 
-      // 2. Fetch Config (Schedule, Logo, Blocked Dates)
-      const { data: dbConfig } = await supabase.from('config').select('*').eq('id', 'global_config').single();
-      if (dbConfig) {
-        if (dbConfig.schedule) setWorkSchedule(dbConfig.schedule);
-        if (dbConfig.logo) setLogo(dbConfig.logo);
-        if (dbConfig.blocked_dates) setBlockedDates(dbConfig.blocked_dates); // Fetch blocked dates
+      // 2. Fetch Configs for BOTH doctors
+      // We use 'dr_deboeck' and 'dra_rojas' as IDs in the config table
+      const { data: dbConfigs } = await supabase.from('config').select('*');
+      
+      const newDoctorConfigs: DoctorConfigMap = {
+          'Dr. De Boeck': { schedule: DEFAULT_SCHEDULE, blockedDates: [] },
+          'Dra. Rojas': { schedule: DEFAULT_SCHEDULE, blockedDates: [] }
+      };
+
+      if (dbConfigs) {
+          dbConfigs.forEach((conf: any) => {
+              if (conf.id === 'dr_deboeck') {
+                  newDoctorConfigs['Dr. De Boeck'] = {
+                      schedule: conf.schedule || DEFAULT_SCHEDULE,
+                      blockedDates: conf.blocked_dates || []
+                  };
+                  if (conf.logo) setLogo(conf.logo); // Admin sets global logo
+              } else if (conf.id === 'dra_rojas') {
+                  newDoctorConfigs['Dra. Rojas'] = {
+                      schedule: conf.schedule || DEFAULT_SCHEDULE,
+                      blockedDates: conf.blocked_dates || []
+                  };
+              }
+          });
       }
+      setDoctorConfigs(newDoctorConfigs);
 
       // 3. Fetch Appointments
       const { data: dbApps } = await supabase.from('appointments').select('*');
@@ -202,13 +217,6 @@ const App: React.FC = () => {
         } else {
             alert("Error al guardar turno. Intente nuevamente.");
         }
-    } else {
-        const localApp = { ...data, id: crypto.randomUUID(), status: 'confirmed' as const, endTime };
-        const updated = [...appointments, localApp];
-        setAppointments(updated);
-        localStorage.setItem('rojas_deboeck_appointments', JSON.stringify(updated));
-        setView(ViewState.LANDING);
-        setShowSuccessModal(true);
     }
   };
 
@@ -216,38 +224,42 @@ const App: React.FC = () => {
     if (isSupabaseConfigured()) {
         await supabase.from('appointments').update({ status }).eq('id', id);
         fetchData();
-    } else {
-        const updated = appointments.map(app => app.id === id ? { ...app, status } : app);
-        setAppointments(updated);
-        localStorage.setItem('rojas_deboeck_appointments', JSON.stringify(updated));
     }
   };
 
-  const handleUpdateSchedule = async (newSchedule: WorkSchedule) => {
-    setWorkSchedule(newSchedule);
+  const handleUpdateSchedule = async (newSchedule: WorkSchedule, doctorKey: string) => {
+    // doctorKey comes as 'dr_deboeck' or 'dra_rojas'
+    const doctorName = doctorKey === 'dr_deboeck' ? 'Dr. De Boeck' : 'Dra. Rojas';
+    
+    setDoctorConfigs(prev => ({
+        ...prev,
+        [doctorName]: { ...prev[doctorName], schedule: newSchedule }
+    }));
+
     if (isSupabaseConfigured()) {
-        await supabase.from('config').upsert({ id: 'global_config', schedule: newSchedule });
-    } else {
-        localStorage.setItem('rojas_deboeck_schedule', JSON.stringify(newSchedule));
+        await supabase.from('config').upsert({ id: doctorKey, schedule: newSchedule });
     }
   };
 
-  const handleUpdateBlockedDates = async (newDates: string[]) => {
-    setBlockedDates(newDates);
+  const handleUpdateBlockedDates = async (newDates: string[], doctorKey: string) => {
+    const doctorName = doctorKey === 'dr_deboeck' ? 'Dr. De Boeck' : 'Dra. Rojas';
+    
+    setDoctorConfigs(prev => ({
+        ...prev,
+        [doctorName]: { ...prev[doctorName], blockedDates: newDates }
+    }));
+
     if (isSupabaseConfigured()) {
-        // Se asume que existe la columna blocked_dates (jsonb)
-        await supabase.from('config').upsert({ id: 'global_config', blocked_dates: newDates });
-    } else {
-        localStorage.setItem('rojas_deboeck_blocked', JSON.stringify(newDates));
+        await supabase.from('config').upsert({ id: doctorKey, blocked_dates: newDates });
     }
   };
 
   const handleUpdateLogo = async (newLogo: string) => {
     setLogo(newLogo);
     if (isSupabaseConfigured()) {
-        await supabase.from('config').upsert({ id: 'global_config', logo: newLogo });
-    } else {
-        localStorage.setItem('rojas_deboeck_logo', newLogo);
+        // Logo is saved on De Boeck's config or we could have a separate global config, 
+        // but saving on dr_deboeck is fine for now as he is main admin.
+        await supabase.from('config').upsert({ id: 'dr_deboeck', logo: newLogo });
     }
   };
 
@@ -269,8 +281,6 @@ const App: React.FC = () => {
             console.error("Error guardando servicios:", error);
             alert("Hubo un error guardando los cambios en la base de datos.");
         }
-    } else {
-        localStorage.setItem('rojas_deboeck_services', JSON.stringify(newServices));
     }
   };
 
@@ -327,12 +337,12 @@ const App: React.FC = () => {
     e.preventDefault();
     if (passwordInput === '31842796') {
       setIsAuthenticated(true);
-      setCurrentUser('admin');
+      setCurrentUser('admin'); // Dr. De Boeck
       setShowLoginModal(false);
       setView(ViewState.ADMIN);
     } else if (passwordInput === '1287') {
       setIsAuthenticated(true);
-      setCurrentUser('rojas');
+      setCurrentUser('rojas'); // Dra. Rojas
       setShowLoginModal(false);
       setView(ViewState.ADMIN);
     } else {
@@ -370,6 +380,14 @@ const App: React.FC = () => {
           </div>
       )
   }
+
+  // Determine current admin schedule/blocked based on login
+  const currentAdminName = currentUser === 'admin' ? 'Dr. De Boeck' : 'Dra. Rojas';
+  const currentAdminConfig = doctorConfigs[currentAdminName] || { schedule: DEFAULT_SCHEDULE, blockedDates: [] };
+
+  // For Chatbot, we can pass De Boeck's schedule as primary or merge both. 
+  // For simplicity, passing De Boeck's. Chatbot enhancement for multiple doctors is a separate task.
+  const primarySchedule = doctorConfigs['Dr. De Boeck'].schedule;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
@@ -499,8 +517,7 @@ const App: React.FC = () => {
              <PatientBooking 
               services={services}
               existingAppointments={appointments}
-              workSchedule={workSchedule}
-              blockedDates={blockedDates}
+              doctorConfigs={doctorConfigs}
               initialService={selectedServiceForBooking}
               onBook={handleBookAppointment}
             />
@@ -512,9 +529,10 @@ const App: React.FC = () => {
             <AdminDashboard 
               appointments={appointments}
               services={services}
-              workSchedule={workSchedule}
+              workSchedule={currentAdminConfig.schedule}
+              blockedDates={currentAdminConfig.blockedDates}
+              currentUserRole={currentUser}
               currentLogo={logo}
-              blockedDates={blockedDates}
               onUpdateSchedule={handleUpdateSchedule}
               onStatusChange={handleStatusChange}
               onUpdateServices={handleUpdateServices}
@@ -527,9 +545,8 @@ const App: React.FC = () => {
         )}
 
         {/* Patient AI Chatbot */}
-        {/* Solo visible para pacientes (Landing o Booking) */}
         {view !== ViewState.ADMIN && (
-           <PatientChatBot services={services} workSchedule={workSchedule} />
+           <PatientChatBot services={services} workSchedule={primarySchedule} />
         )}
 
       </main>

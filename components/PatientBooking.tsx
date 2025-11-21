@@ -1,14 +1,14 @@
+
 import React, { useState, useMemo } from 'react';
-import { Service, Appointment, WorkSchedule } from '../types';
+import { Service, Appointment, DoctorConfigMap } from '../types';
 import { ServiceCard } from './ServiceCard';
 import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
 
 interface PatientBookingProps {
   services: Service[];
   existingAppointments: Appointment[];
-  workSchedule: WorkSchedule;
-  blockedDates: string[];
-  initialService?: Service | null; // Propiedad para recibir el servicio pre-seleccionado
+  doctorConfigs: DoctorConfigMap;
+  initialService?: Service | null;
   onBook: (appointment: Omit<Appointment, 'id' | 'status' | 'endTime'>) => void;
 }
 
@@ -28,12 +28,10 @@ const minutesToTime = (minutes: number) => {
 export const PatientBooking: React.FC<PatientBookingProps> = ({ 
   services, 
   existingAppointments, 
-  workSchedule, 
-  blockedDates, 
+  doctorConfigs,
   initialService, 
   onBook 
 }) => {
-  // Si hay un servicio inicial, comenzamos en el paso 2, sino en el 1
   const [step, setStep] = useState<1 | 2 | 3>(initialService ? 2 : 1);
   const [selectedService, setSelectedService] = useState<Service | null>(initialService || null);
   
@@ -42,8 +40,14 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', notes: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Calculate dates for the next 30 days
+  // Determine which doctor's config to use based on selected service
+  const activeDoctor = selectedService?.doctor || 'Dr. De Boeck';
+  const activeConfig = doctorConfigs[activeDoctor] || doctorConfigs['Dr. De Boeck'];
+
+  // Calculate dates for the next 30 days based on ACTIVE DOCTOR'S schedule
   const availableDates = useMemo(() => {
+    if (!activeConfig) return [];
+
     const dates = [];
     const today = new Date();
     for (let i = 1; i <= 30; i++) {
@@ -51,15 +55,13 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
       d.setDate(today.getDate() + i);
       
       const dateString = d.toISOString().split('T')[0];
-      const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon...
+      const dayOfWeek = d.getDay(); 
       
-      // Solo incluir si:
-      // 1. El día de la semana está habilitado en la agenda general
-      // 2. La fecha NO está en la lista de fechas bloqueadas
+      // Check specific doctor's schedule and blocked dates
       if (
-        workSchedule[dayOfWeek] && 
-        workSchedule[dayOfWeek].enabled && 
-        !blockedDates.includes(dateString)
+        activeConfig.schedule[dayOfWeek] && 
+        activeConfig.schedule[dayOfWeek].enabled && 
+        !activeConfig.blockedDates.includes(dateString)
       ) {
         dates.push({
           fullDate: dateString,
@@ -71,11 +73,13 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
       }
     }
     return dates;
-  }, [workSchedule, blockedDates]);
+  }, [activeConfig]);
 
   const generateTimeSlots = (dateStr: string, serviceDuration: number) => {
+    if (!activeConfig) return [];
+
     const dayIndex = new Date(dateStr + 'T00:00:00').getDay();
-    const schedule = workSchedule[dayIndex];
+    const schedule = activeConfig.schedule[dayIndex];
     
     if (!schedule || !schedule.enabled) return [];
 
@@ -83,23 +87,28 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
     const endMins = timeToMinutes(schedule.end);
     const slots: string[] = [];
     
-    // Interval for slots (e.g., every 30 mins)
     const interval = 30; 
 
-    // Get existing appointments for this date
-    const dayApps = existingAppointments.filter(a => a.date === dateStr && a.status !== 'cancelled');
+    // Filter existing appointments: only those for the SAME DOCTOR need to be checked for collision?
+    // Ideally yes, but simpler logic: filter appointments that match the doctor of the service.
+    // Or if rooms are shared, we check all. Assuming separate chairs/agendas:
+    const dayApps = existingAppointments.filter(a => {
+        // Find the service for this appointment to know the doctor
+        const appService = services.find(s => s.id === a.serviceId);
+        const appDoctor = appService?.doctor || 'Dr. De Boeck';
+        
+        // Collision check only if it's the same doctor (or if you want to block shared resources)
+        // Here we assume independent agendas.
+        return a.date === dateStr && a.status !== 'cancelled' && appDoctor === activeDoctor;
+    });
 
     for (let time = startMins; time + serviceDuration <= endMins; time += interval) {
       const slotStart = time;
       const slotEnd = time + serviceDuration;
       
-      // Check collision with existing appointments
       const isBlocked = dayApps.some(app => {
         const appStart = timeToMinutes(app.time);
-        // If app.endTime is missing (old data), assume 30 min
         const appEnd = app.endTime ? timeToMinutes(app.endTime) : appStart + 30;
-        
-        // Check overlap: (StartA < EndB) and (EndA > StartB)
         return (slotStart < appEnd) && (slotEnd > appStart);
       });
 
@@ -114,7 +123,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
   const availableSlots = useMemo(() => {
     if (!selectedDate || !selectedService) return [];
     return generateTimeSlots(selectedDate, selectedService.durationMinutes);
-  }, [selectedDate, selectedService, existingAppointments, workSchedule]);
+  }, [selectedDate, selectedService, existingAppointments, activeConfig]);
 
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
@@ -149,7 +158,6 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
 
   const formatPrice = (price: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(price);
 
-  // Group services
   const deboeckServices = services.filter(s => !s.doctor || s.doctor === 'Dr. De Boeck');
   const rojasServices = services.filter(s => s.doctor === 'Dra. Rojas');
 
@@ -228,11 +236,14 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
                 <p className="text-slate-500">
                     Para: <span className="font-semibold text-teal-700">{selectedService?.name}</span> ({selectedService?.durationMinutes} min)
                 </p>
+                <p className="text-xs text-slate-400 mt-1">
+                    Agenda de: <strong>{activeDoctor}</strong>
+                </p>
             </div>
 
             {/* Date Scroller */}
             <div className="flex gap-3 overflow-x-auto pb-4 mb-6 scrollbar-hide">
-              {availableDates.length === 0 && <p className="text-slate-400">No hay fechas disponibles (revisa los días bloqueados por el consultorio).</p>}
+              {availableDates.length === 0 && <p className="text-slate-400">No hay fechas disponibles para este profesional (revisa días bloqueados).</p>}
               {availableDates.map((d) => (
                 <button
                   key={d.fullDate}
