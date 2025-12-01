@@ -1,0 +1,15 @@
+
+COLOQUE SUS FOTOS AQUÍ
+
+Para que el carrusel funcione, pegue sus imágenes en esta carpeta y renómbrelas exactamente así:
+
+1. restauracion-filtrada.jpg
+2. restauracion-directa.jpg
+3. desgastes.jpg
+4. erupcion-canino.jpg
+5. enderezamiento.jpg
+6. resortes.jpg
+7. dra-rojas.jpg
+8. nivelacion.jpg
+
+Una vez pegadas las fotos aquí, la página web las mostrará automáticamente.
