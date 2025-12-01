@@ -25,16 +25,16 @@ const minutesToTime = (minutes: number) => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
-export const PatientBooking: React.FC<PatientBookingProps> = ({ 
-  services, 
-  existingAppointments, 
+export const PatientBooking: React.FC<PatientBookingProps> = ({
+  services,
+  existingAppointments,
   doctorConfigs,
-  initialService, 
-  onBook 
+  initialService,
+  onBook
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(initialService ? 2 : 1);
   const [selectedService, setSelectedService] = useState<Service | null>(initialService || null);
-  
+
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', notes: '' });
@@ -53,14 +53,14 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
     for (let i = 1; i <= 30; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      
+
       const dateString = d.toISOString().split('T')[0];
-      const dayOfWeek = d.getDay(); 
-      
+      const dayOfWeek = d.getDay();
+
       // Check specific doctor's schedule and blocked dates
       if (
-        activeConfig.schedule[dayOfWeek] && 
-        activeConfig.schedule[dayOfWeek].enabled && 
+        activeConfig.schedule[dayOfWeek] &&
+        activeConfig.schedule[dayOfWeek].enabled &&
         !activeConfig.blockedDates.includes(dateString)
       ) {
         dates.push({
@@ -80,25 +80,25 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
 
     const dayIndex = new Date(dateStr + 'T00:00:00').getDay();
     const schedule = activeConfig.schedule[dayIndex];
-    
+
     if (!schedule || !schedule.enabled) return [];
 
     const startMins = timeToMinutes(schedule.start);
     const endMins = timeToMinutes(schedule.end);
     const slots: string[] = [];
-    
-    const interval = 30; 
+
+    const interval = 30;
 
     const dayApps = existingAppointments.filter(a => {
-        const appService = services.find(s => s.id === a.serviceId);
-        const appDoctor = appService?.doctor || 'Dr. De Boeck';
-        return a.date === dateStr && a.status !== 'cancelled' && appDoctor === activeDoctor;
+      const appService = services.find(s => s.id === a.serviceId);
+      const appDoctor = appService?.doctor || 'Dr. De Boeck';
+      return a.date === dateStr && a.status !== 'cancelled' && appDoctor === activeDoctor;
     });
 
     for (let time = startMins; time + serviceDuration <= endMins; time += interval) {
       const slotStart = time;
       const slotEnd = time + serviceDuration;
-      
+
       const isBlocked = dayApps.some(app => {
         const appStart = timeToMinutes(app.time);
         const appEnd = app.endTime ? timeToMinutes(app.endTime) : appStart + 30;
@@ -109,7 +109,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
         slots.push(minutesToTime(slotStart));
       }
     }
-    
+
     return slots;
   };
 
@@ -150,8 +150,8 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
   };
 
   const formatPrice = (price: number) => {
-      if (price === 0) return 'A consultar';
-      return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(price);
+    if (price === 0) return 'A consultar';
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(price);
   };
 
   const deboeckServices = services.filter(s => !s.doctor || s.doctor === 'Dr. De Boeck');
@@ -182,40 +182,40 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
         {step === 1 && (
           <div className="animate-fade-in space-y-8">
             <div>
-                <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <span className="w-2 h-8 bg-teal-600 rounded-full"></span>
-                    Dr. De Boeck - Ortodoncia
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span className="w-2 h-8 bg-teal-600 rounded-full"></span>
+                Dr. De Boeck - Ortodoncia
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {deboeckServices.map(service => (
-                    <ServiceCard 
-                    key={service.id} 
-                    service={service} 
+                  <ServiceCard
+                    key={service.id}
+                    service={service}
                     selected={selectedService?.id === service.id}
                     onSelect={handleServiceSelect}
-                    />
+                  />
                 ))}
                 {deboeckServices.length === 0 && <p className="text-slate-400 italic">No hay servicios disponibles.</p>}
-                </div>
+              </div>
             </div>
 
             {rojasServices.length > 0 && (
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
-                        Dra. Analía Rojas - Odontología Gral.
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {rojasServices.map(service => (
-                        <ServiceCard 
-                        key={service.id} 
-                        service={service} 
-                        selected={selectedService?.id === service.id}
-                        onSelect={handleServiceSelect}
-                        />
-                    ))}
-                    </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
+                  Dra. Analía Rojas - Odontología Gral.
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {rojasServices.map(service => (
+                    <ServiceCard
+                      key={service.id}
+                      service={service}
+                      selected={selectedService?.id === service.id}
+                      onSelect={handleServiceSelect}
+                    />
+                  ))}
                 </div>
+              </div>
             )}
           </div>
         )}
@@ -226,15 +226,15 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
             <button onClick={() => setStep(1)} className="text-sm text-slate-500 flex items-center mb-4 hover:text-teal-700">
               <ChevronLeft className="w-4 h-4" /> Volver
             </button>
-            
+
             <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">Elige Fecha y Hora</h2>
-                <p className="text-slate-500">
-                    Para: <span className="font-semibold text-teal-700">{selectedService?.name}</span> ({selectedService?.durationMinutes} min)
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                    Agenda de: <strong>{activeDoctor}</strong>
-                </p>
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">Elige Fecha y Hora</h2>
+              <p className="text-slate-500">
+                Para: <span className="font-semibold text-teal-700">{selectedService?.name}</span> ({selectedService?.durationMinutes} min)
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Agenda de: <strong>{activeDoctor}</strong>
+              </p>
             </div>
 
             {/* Date Scroller */}
@@ -246,8 +246,8 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
                   onClick={() => handleDateSelect(d.fullDate)}
                   className={`
                     flex-shrink-0 w-20 h-24 rounded-xl flex flex-col items-center justify-center border-2 transition-all
-                    ${selectedDate === d.fullDate 
-                      ? 'border-teal-600 bg-teal-700 text-white shadow-lg scale-105' 
+                    ${selectedDate === d.fullDate
+                      ? 'border-teal-600 bg-teal-700 text-white shadow-lg scale-105'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-teal-300'}
                   `}
                 >
@@ -289,7 +289,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
             )}
 
             <div className="mt-8 flex justify-end">
-              <button 
+              <button
                 disabled={!selectedDate || !selectedTime}
                 onClick={() => setStep(3)}
                 className="bg-teal-600 text-white py-3 px-8 rounded-full font-bold shadow-lg shadow-teal-200/50 disabled:opacity-50 disabled:shadow-none hover:bg-teal-700 transition-all flex items-center"
@@ -303,7 +303,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
         {/* Step 3: Confirm Details */}
         {step === 3 && selectedService && (
           <div className="animate-fade-in">
-             <button onClick={() => setStep(2)} className="text-sm text-slate-500 flex items-center mb-4 hover:text-teal-700">
+            <button onClick={() => setStep(2)} className="text-sm text-slate-500 flex items-center mb-4 hover:text-teal-700">
               <ChevronLeft className="w-4 h-4" /> Volver
             </button>
 
@@ -339,54 +339,54 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
               {/* Form */}
               <form onSubmit={handleSubmit} className="flex-1 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-800 mb-4">Tus Datos</h2>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
+                    type="text"
                     className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
                     placeholder="Juan Pérez"
                     value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Email (Opcional)</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
                       placeholder="juan@ejemplo.com"
                       value={formData.email}
-                      onChange={e => setFormData({...formData, email: e.target.value})}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
-                    <input 
+                    <input
                       required
-                      type="tel" 
+                      type="tel"
                       className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
                       placeholder="11 1234 5678"
                       value={formData.phone}
-                      onChange={e => setFormData({...formData, phone: e.target.value})}
+                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nota Opcional</label>
-                  <textarea 
+                  <textarea
                     className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-teal-500 outline-none h-24 resize-none bg-white text-slate-900"
                     placeholder="Primera vez, dolor de muela, etc..."
                     value={formData.notes}
-                    onChange={e => setFormData({...formData, notes: e.target.value})}
+                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
                   />
                 </div>
 
-                <button 
+                <button
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg shadow-xl hover:bg-slate-800 transition-all mt-4 flex items-center justify-center gap-2 disabled:opacity-70"
