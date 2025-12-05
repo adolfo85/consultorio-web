@@ -54,7 +54,7 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
       const d = new Date(today);
       d.setDate(today.getDate() + i);
 
-      const dateString = d.toISOString().split('T')[0];
+      const dateString = d.toLocaleDateString('en-CA');
       const dayOfWeek = d.getDay();
 
       // Check specific doctor's schedule and blocked dates
@@ -78,7 +78,9 @@ export const PatientBooking: React.FC<PatientBookingProps> = ({
   const generateTimeSlots = (dateStr: string, serviceDuration: number) => {
     if (!activeConfig) return [];
 
-    const dayIndex = new Date(dateStr + 'T00:00:00').getDay();
+    // Parse date string manually to avoid timezone issues
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const dayIndex = new Date(year, month - 1, day).getDay();
     const schedule = activeConfig.schedule[dayIndex];
 
     if (!schedule || !schedule.enabled) return [];
